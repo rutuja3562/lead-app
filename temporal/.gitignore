@@ -2,10 +2,10 @@ node_modules/
 dist/
 coverage/
 
-# # env (never commit secrets)
-# .env
-# .env.*
-# !.env.example
+# env (never commit secrets)
+.env
+.env.*
+!.env.example
 
 # logs
 *.log
