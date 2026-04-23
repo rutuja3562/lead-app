@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+dist/
+coverage/
+
+# env (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# NestJS
+.nestjs/
+
+# Local uploads (if STORAGE_PROVIDER=local)
+uploads/
+
+# logs
+*.log
+npm-debug.*

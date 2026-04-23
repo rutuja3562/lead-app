@@ -1,0 +1,99 @@
+version: '3.9'
+
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: lead_app_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: lead_app
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Temporal Server (dev mode, all-in-one) ─────────────────────────────────
+  temporal:
+    image: temporalio/auto-setup:1.23.1
+    container_name: lead_app_temporal
+    restart: unless-stopped
+    ports:
+      - '7233:7233'
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PWD=postgres
+      - POSTGRES_SEEDS=postgres
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig
+
+  # ─── Temporal UI ────────────────────────────────────────────────────────────
+  temporal-ui:
+    image: temporalio/ui:2.27.3
+    container_name: lead_app_temporal_ui
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      - temporal
+
+  # ─── NestJS Backend ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lead_app_backend
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: lead_app
+      TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # ─── Temporal Worker ────────────────────────────────────────────────────────
+  temporal-worker:
+    build:
+      context: ./temporal
+      dockerfile: Dockerfile
+    container_name: lead_app_temporal_worker
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      - temporal
+      - backend
+    volumes:
+      - ./temporal:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
